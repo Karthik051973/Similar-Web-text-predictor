@@ -14,10 +14,22 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # ---------------------------
-# NLTK SETUP
+# 🔥 NLTK FIX FOR DEPLOYMENT
 # ---------------------------
-nltk.download('punkt', quiet=True)
-nltk.download('stopwords', quiet=True)
+try:
+    nltk.data.find('tokenizers/punkt')
+except:
+    nltk.download('punkt')
+
+try:
+    nltk.data.find('tokenizers/punkt_tab')
+except:
+    nltk.download('punkt_tab')
+
+try:
+    nltk.data.find('corpora/stopwords')
+except:
+    nltk.download('stopwords')
 
 # ---------------------------
 # 🔹 PREPROCESS
@@ -136,7 +148,7 @@ if st.button("Analyze"):
     tfidf_sim = cosine_similarity(X)
 
     # ---------------------------
-    # 🔥 TOP WORDS + FREQUENCY
+    # 🔥 TOP WORDS + TF-IDF
     # ---------------------------
     st.subheader("🏷️ Top Words with TF-IDF Scores")
 
