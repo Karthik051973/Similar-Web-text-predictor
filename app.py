@@ -7,43 +7,70 @@ import numpy as np
 import time
 import pandas as pd
 
-from nltk.corpus import stopwords
+from nltk.corpus import stopwords, wordnet
 from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+from nltk import pos_tag
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # ---------------------------
-# 🔥 NLTK FIX FOR DEPLOYMENT
+# 🔥 NLTK FIX (ALL REQUIRED)
 # ---------------------------
-try:
-    nltk.data.find('tokenizers/punkt')
-except:
-    nltk.download('punkt')
+def download_nltk():
+    resources = [
+        ('tokenizers/punkt', 'punkt'),
+        ('tokenizers/punkt_tab', 'punkt_tab'),
+        ('corpora/stopwords', 'stopwords'),
+        ('corpora/wordnet', 'wordnet'),
+        ('corpora/omw-1.4', 'omw-1.4'),
+        ('taggers/averaged_perceptron_tagger', 'averaged_perceptron_tagger'),
+        ('taggers/averaged_perceptron_tagger_eng', 'averaged_perceptron_tagger_eng')
+    ]
 
-try:
-    nltk.data.find('tokenizers/punkt_tab')
-except:
-    nltk.download('punkt_tab')
+    for path, name in resources:
+        try:
+            nltk.data.find(path)
+        except:
+            nltk.download(name)
 
-try:
-    nltk.data.find('corpora/stopwords')
-except:
-    nltk.download('stopwords')
+download_nltk()
 
 # ---------------------------
-# 🔹 PREPROCESS
+# 🔹 POS TAG CONVERTER
+# ---------------------------
+def get_wordnet_pos(tag):
+    if tag.startswith('J'):
+        return wordnet.ADJ
+    elif tag.startswith('V'):
+        return wordnet.VERB
+    elif tag.startswith('N'):
+        return wordnet.NOUN
+    elif tag.startswith('R'):
+        return wordnet.ADV
+    return wordnet.NOUN
+
+# ---------------------------
+# 🔹 PREPROCESS WITH LEMMATIZATION
 # ---------------------------
 def preprocess(text):
     stop_words = set(stopwords.words('english'))
+    lemmatizer = WordNetLemmatizer()
 
     text = text.lower()
     text = re.sub(r'[^a-zA-Z\s]', ' ', text)
 
     tokens = word_tokenize(text)
-    tokens = [w for w in tokens if w not in stop_words and len(w) > 2]
+    tagged = pos_tag(tokens)
 
-    return tokens[:500]
+    processed_tokens = []
+    for word, tag in tagged:
+        if word not in stop_words and len(word) > 2:
+            lemma = lemmatizer.lemmatize(word, get_wordnet_pos(tag))
+            processed_tokens.append(lemma)
+
+    return processed_tokens[:500]
 
 # ---------------------------
 # 🔹 JACCARD SIMILARITY
@@ -56,7 +83,6 @@ def jaccard(a, b):
 # 🔹 CLEAN TEXT EXTRACTION
 # ---------------------------
 def extract_text(soup):
-
     for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
         tag.decompose()
 
@@ -107,7 +133,7 @@ def crawl(urls):
             else:
                 st.warning(f"⚠️ Low content: {url}")
 
-        except:
+        except Exception as e:
             st.error(f"❌ Failed: {url}")
 
     return docs, valid
@@ -117,7 +143,7 @@ def crawl(urls):
 # ---------------------------
 st.set_page_config(page_title="URL Similarity Analyzer", layout="wide")
 
-st.title("🌐 URL Content Similarity & Clustering (Final Version)")
+st.title("🌐 URL Content Similarity & Clustering (Final Version with Lemmatization)")
 
 urls_input = st.text_area("Enter URLs (one per line):")
 
@@ -131,17 +157,17 @@ if st.button("Analyze"):
         st.stop()
 
     # ---------------------------
-    # PREPROCESS
+    # 🔹 PREPROCESS
     # ---------------------------
     token_docs = [preprocess(doc) for doc in docs]
     cleaned_docs = [" ".join(tokens) for tokens in token_docs]
 
     # ---------------------------
-    # TF-IDF
+    # 🔹 TF-IDF
     # ---------------------------
     vectorizer = TfidfVectorizer(
         max_features=1500,
-        ngram_range=(1,2)
+        ngram_range=(1, 2)
     )
 
     X = vectorizer.fit_transform(cleaned_docs)
@@ -156,7 +182,6 @@ if st.button("Analyze"):
 
     for idx, url in enumerate(valid_urls):
         row = X[idx].toarray().flatten()
-
         top_indices = row.argsort()[-10:][::-1]
 
         words = [feature_names[i] for i in top_indices if row[i] > 0]
@@ -180,7 +205,7 @@ if st.button("Analyze"):
     scores = []
 
     for i in range(len(valid_urls)):
-        for j in range(i+1, len(valid_urls)):
+        for j in range(i + 1, len(valid_urls)):
 
             tfidf_score = tfidf_sim[i][j]
             jaccard_score = jaccard(token_docs[i], token_docs[j])
